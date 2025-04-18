@@ -11,7 +11,7 @@ PRODUCT_URL = (
     "https://www.ikea.com.tw/zh/products/armchairs-footstool-and-sofa-tables/"
     "armchairs/dyvlinge-art-80581919"
 )
-TARGET_STORES = {"桃園店", "新莊店", "新店店", "內湖店", "台北城市店","高雄店“}
+TARGET_STORES = {"桃園店", "新莊店", "新店店", "內湖店", "台北城市店","高雄店"}
 
 BOT_TOKEN = os.environ["BOT_TOKEN"]   # 由 GitHub Secrets 提供
 CHAT_ID   = os.environ["CHAT_ID"]
