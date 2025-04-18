@@ -1,0 +1,29 @@
+name: IKEA Stock Watcher
+
+on:
+  schedule:
+    # 每 15 分鐘跑一次（UTC，+8 變台灣時間），≒ 每月 2880 分鐘，可免費
+    - cron: '*/15 * * * *'
+  workflow_dispatch:        # 手動按鈕也能執行
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 取出程式碼
+        uses: actions/checkout@v4
+
+      - name: 安裝 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 安裝依賴
+        run: pip install -r requirements.txt
+
+      - name: 執行監控腳本
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          CHAT_ID:   ${{ secrets.CHAT_ID }}
+        run: python ikea_once.py

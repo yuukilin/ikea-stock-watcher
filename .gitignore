@@ -1,0 +1,4 @@
+# 忽略虛擬環境、cache
+.venv/
+__pycache__/
+*.pyc
