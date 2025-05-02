@@ -21,7 +21,7 @@ from bs4 import BeautifulSoup
 # --------------------------- 追蹤清單 ---------------------------
 PRODUCTS = {
     "80581919": {
-        "name": "DYVLINGE 旋轉休閒椅 (kelinge 橘色)",
+        "name": "DYVLINGE 橘色酷酷椅",
         "url": "https://www.ikea.com.tw/zh/products/armchairs-footstool-and-sofa-tables/armchairs/dyvlinge-art-80581919",
     },
     "80586747": {
@@ -29,7 +29,7 @@ PRODUCTS = {
         "url": "https://www.ikea.com.tw/zh/products/light-sources-and-smart-lighting/light-sources/molnart-art-80586747",
     },
     "80583720": {
-        "name": "KÄLLARHÄLS 透明花瓶 15 cm",
+        "name": "KÄLLARHÄLS 便便花瓶",
         "url": "https://www.ikea.com.tw/zh/products/home-decoration/vases-bowls-and-accessories/kallarhals-art-80583720",
     },
 }
