@@ -1,12 +1,13 @@
-name: IKEA Stock Watcher (Daily)
+name: IKEA Stock Watcher
 
 on:
   schedule:
-    - cron: '0 0 * * *'     # 每天 00:00 UTC → 台灣 08:00
+    # 每天台灣 18:00 ＝ UTC 10:00
+    - cron: "0 10 * * *"
   workflow_dispatch:
 
 jobs:
-  watch:
+  run:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -14,9 +15,9 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
-      - name: Install dependencies
+      - name: Install requirements
         run: pip install -r requirements.txt
 
       - name: Run watcher
