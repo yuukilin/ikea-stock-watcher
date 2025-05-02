@@ -22,8 +22,7 @@ PRODUCTS = {
         "url": "https://www.ikea.com.tw/zh/products/home-decoration/vases-bowls-and-accessories/kallarhals-art-80583720",
     },
 
-    # 下面留你的舊貨，別刪
-    # "60468813": {
+    "60468813": {
         "name": "DYVLINGE 旋轉休閒椅, kelinge 橘色",
         "url": "https://www.ikea.com.tw/zh/products/armchairs-footstool-and-sofa-tables/armchairs/dyvlinge-art-80581919",
     },
