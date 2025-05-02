@@ -13,6 +13,7 @@ import os
 import logging
 from datetime import datetime
 from zoneinfo import ZoneInfo
+import re
 
 import cloudscraper
 from bs4 import BeautifulSoup
@@ -63,18 +64,20 @@ def fetch_html(url: str) -> str:
 
 def parse_availability(html: str):
     """
-    回傳：
-        in_stock -> dict {門市: 顯示字串 (含件數)}
-        full     -> dict {門市: 顯示字串 (含件數)}  (所有門市，含缺貨)
+    解析門市庫存：
+        回傳 in_stock -> dict {門市: 件數字串}
+    規則：
+        1. 先找「有庫存於 XXX店  n 件庫存」
+        2. 找不到就視為缺貨
     """
-    soup = BeautifulSoup(html, "html.parser")
-    full = {
-        d["data-shopname"].strip(): d.get_text(strip=True)
-        for d in soup.find_all("div", attrs={"data-shopname": True})
-        if d["data-shopname"].strip() in TARGET_STORES
-    }
-    in_stock = {s: t for s, t in full.items() if "缺貨" not in t}
-    return in_stock, full
+    in_stock = {}
+    for store in TARGET_STORES:
+        # 範例文字：有庫存於 桃園店 \n 8 件庫存
+        m = re.search(rf"有庫存於\s*{store}\D+?(\d+)\s*件庫存", html)
+        if m:
+            qty = m.group(1)
+            in_stock[store] = f"{qty} 件庫存"
+    return in_stock
 
 
 def send_telegram(text: str) -> None:
