@@ -1,55 +1,81 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
-IKEA 80581919 庫存監控（單次版，Cloudflare OK）
+IKEA 庫存監控（台灣站）
+執行一次就檢查所有產品，有貨就寄信 / 傳訊息通知
+作者：勇成（原始碼 by you）＋毒舌改良版
 """
-import os, logging, cloudscraper
+
+import os
+import re
+import smtplib
+import requests
+from datetime import datetime
+from email.message import EmailMessage
 from bs4 import BeautifulSoup
+import pytz
 
-PRODUCT_URL = (
-    "https://www.ikea.com.tw/zh/products/armchairs-footstool-and-sofa-tables/"
-    "armchairs/dyvlinge-art-80581919"
-)
-TARGET_STORES = {"桃園店", "新莊店", "新店店", "內湖店", "台北城市店"}
+# ----------- 你要追蹤的商品清單 -----------
+PRODUCTS = {
+    # ★ 新加的兩個
+    "80586747": {
+        "name": "MOLNART LED 甜甜圈燈泡",
+        "url": "https://www.ikea.com.tw/zh/products/light-sources-and-smart-lighting/light-sources/molnart-art-80586747",
+    },
+    "80583720": {
+        "name": "KÄLLARHÄLS 透明花瓶 15 cm",
+        "url": "https://www.ikea.com.tw/zh/products/home-decoration/vases-bowls-and-accessories/kallarhals-art-80583720",
+    },
 
-BOT_TOKEN = os.environ["BOT_TOKEN"]
-CHAT_ID   = os.environ["CHAT_ID"]
-
-HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0 Safari/537.36"
-    ),
-    "Accept-Language": "zh-TW,zh;q=0.9,en;q=0.8",
+    # ↓ 下面留著你原本就追蹤的舊貨，照抄就好
+    # "60468813": {"name": "VÅRDANDE 亞加力盒", "url": "..."},
 }
 
-def fetch_html(url: str) -> str:
-    """用 cloudscraper 穿雲破盾，避免 403"""
-    scraper = cloudscraper.create_scraper()
-    r = scraper.get(url, headers=HEADERS, timeout=20)
-    r.raise_for_status()
-    return r.text
+# ----------- 通知設定（用環境變數裝私密資料）-----------
+SMTP_HOST = os.environ["SMTP_HOST"]
+SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
+SMTP_USER = os.environ["SMTP_USER"]
+SMTP_PASS = os.environ["SMTP_PASS"]
+MAIL_TO   = os.environ["MAIL_TO"]      # 逗號分隔可多人
 
-def parse_availability(html: str):
-    soup = BeautifulSoup(html, "html.parser")
-    status = {
-        d["data-shopname"].strip(): d.get_text(strip=True)
-        for d in soup.find_all("div", attrs={"data-shopname": True})
-        if d["data-shopname"].strip() in TARGET_STORES
-    }
-    in_stock = [s for s, t in status.items() if "缺貨" not in t]
-    return in_stock, status
+# ----------- 兩個小工具函式 -----------
+def is_available(url: str) -> bool:
+    """
+    粗暴判斷「線上購物」是不是還在顯示『缺貨』。
+    有貨→傳 True，缺貨→False
+    IKEA 網頁用詞固定，直接關鍵字最省事。
+    """
+    html = requests.get(url, timeout=10).text
+    return "缺貨 線上購物" not in html   # 網站範例見 :contentReference[oaicite:0]{index=0}
 
-def notify(msg: str):
-    import requests
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    requests.post(url, data={"chat_id": CHAT_ID, "text": msg, "parse_mode": "HTML"}, timeout=10)
 
-def main():
-    avail, full = parse_availability(fetch_html(PRODUCT_URL))
-    if avail:
-        detail = "\n".join(f"• {s}：{full[s]}" for s in avail)
-        notify(f"🟢 IKEA 庫存警報\n{detail}\n商品頁：{PRODUCT_URL}")
+def send_mail(subject: str, body: str) -> None:
+    msg = EmailMessage()
+    msg["From"] = SMTP_USER
+    msg["To"]   = MAIL_TO
+    msg["Subject"] = subject
+    msg.set_content(body)
+
+    with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as smtp:
+        smtp.starttls()
+        smtp.login(SMTP_USER, SMTP_PASS)
+        smtp.send_message(msg)
+
+
+# ----------- 主程式 -----------
+def main() -> None:
+    tz = pytz.timezone("Asia/Taipei")
+    now = datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
+
+    for art_no, item in PRODUCTS.items():
+        if is_available(item["url"]):
+            subject = f"⚡IKEA 有貨：{item['name']}"
+            body    = f"{item['name']}（編號 {art_no}）現在有貨！\n{item['url']}\n時間：{now}"
+            print(body)            # log 給 GitHub Actions 看
+            send_mail(subject, body)
+
+    print(f"全部檢查完畢：{now}")
+
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
     main()
