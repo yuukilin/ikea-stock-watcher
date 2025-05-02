@@ -2,10 +2,10 @@
 # -*- coding: utf-8 -*-
 """
 IKEA 庫存監控（多商品單次版，Cloudflare OK）
-功能：
-    1. 支援多商品：80581919、80586747、80583720
-    2. 每執行一次就檢查三品是否到貨，若任一店點有貨則立刻 Telegram 通知
-    3. 交由 GitHub Actions cron 定時呼叫
+------------------------------------------------
+* 支援多商品：80581919、80586747、80583720
+* 每執行一次就檢查三品是否到貨，若任一門市有貨立即 Telegram 通知
+* 交由 GitHub Actions 的 cron 來定時呼叫
 
 環境變數：
     BOT_TOKEN — Telegram Bot Token
@@ -18,10 +18,10 @@ import logging
 import cloudscraper
 from bs4 import BeautifulSoup
 
-# -------------- 追蹤清單 --------------
+# --------------------------- 追蹤清單 ---------------------------
 PRODUCTS = {
     "80581919": {
-        "name": "DYVLINGE 旋轉休閒椅, kelinge 橘色",
+        "name": "DYVLINGE 旋轉休閒椅 (kelinge 橘色)",
         "url": "https://www.ikea.com.tw/zh/products/armchairs-footstool-and-sofa-tables/armchairs/dyvlinge-art-80581919",
     },
     "80586747": {
@@ -47,60 +47,98 @@ HEADERS = {
     "Accept-Language": "zh-TW,zh;q=0.9,en;q=0.8",
 }
 
+# --------------------------- 抓取網頁 ---------------------------
 
 def fetch_html(url: str) -> str:
-    """用 cloudscraper 穿雲破盾，避免 403"""
+    """用 Cloudflare Scraper 穿雲破盾，避免 403。"""
     scraper = cloudscraper.create_scraper()
-    r = scraper.get(url, headers=HEADERS, timeout=20)
-    r.raise_for_status()
-    return r.text
+    resp = scraper.get(url, headers=HEADERS, timeout=20)
+    resp.raise_for_status()
+    return resp.text
+
+# --------------------------- 解析庫存 ---------------------------
+
+def _extract_store_from_div(div):
+    """IKEA 網頁有時用 data-shopname，有時用 data-shop_name。"""
+    if div.has_attr("data-shopname"):
+        return div["data-shopname"].strip()
+    if div.has_attr("data-shop_name"):
+        return div["data-shop_name"].strip()
+    return None
 
 
 def parse_availability(html: str):
-    """回傳兩個 dict：qty 與 raw_status。
-    qty: {店名: 數量(int) | -1(有貨但抓不到數字) | 0(缺貨)}
-    raw_status: {店名: 原始文字}
+    """回傳 qty 與 raw 兩個 dict。
+
+    qty: {店名: 數量 (int) | -1 (有貨但沒寫數字) | 0 (缺貨)}
+    raw: {店名: 原始文字}
     """
     soup = BeautifulSoup(html, "html.parser")
-    raw_status = {
-        div["data-shopname"].strip(): div.get_text(strip=True)
-        for div in soup.find_all("div", attrs={"data-shopname": True})
-        if div["data-shopname"].strip() in TARGET_STORES
-    }
 
+    # 1️⃣ 先嘗試從 data-* 屬性抓
+    raw = {}
+    for div in soup.find_all("div"):
+        store = _extract_store_from_div(div)
+        if store and store in TARGET_STORES:
+            raw[store] = div.get_text(" ", strip=True)
+
+    # 2️⃣ 補漏：如果改版導致缺資料，改用 regex 掃描整頁文字
+    html_text = soup.get_text(" ", strip=True)
+    for store in TARGET_STORES:
+        if store in raw:  # 已抓到就跳過
+            continue
+        # 有庫存 + 數量
+        m = re.search(rf"有庫存於\s*{store}\s*[\u4e00-\u9fffA-Za-z0-9 ]*?(\d+) 件庫存", html_text)
+        if m:
+            raw[store] = f"有庫存 {m.group(1)} 件庫存"
+            continue
+        # 有庫存但沒顯示數量
+        if re.search(rf"有庫存於\s*{store}", html_text):
+            raw[store] = "有庫存 (數量未知)"
+            continue
+        # 最後判定為缺貨
+        raw[store] = "缺貨"
+
+    # 3️⃣ 統一轉成 qty 數字
     qty = {}
-    for store, txt in raw_status.items():
+    for store, txt in raw.items():
         if "缺貨" in txt:
             qty[store] = 0
         else:
             m = re.search(r"(\d+)", txt)
-            qty[store] = int(m.group(1)) if m else -1  # -1 = 有貨但無數字
-    return qty, raw_status
+            qty[store] = int(m.group(1)) if m else -1
+    return qty, raw
 
+# --------------------------- 發送通知 ---------------------------
 
-def notify(msg: str):
+def notify(message: str):
     import requests
 
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     requests.post(
         url,
-        data={"chat_id": CHAT_ID, "text": msg, "parse_mode": "HTML", "disable_web_page_preview": True},
+        data={
+            "chat_id": CHAT_ID,
+            "text": message,
+            "parse_mode": "HTML",
+            "disable_web_page_preview": True,
+        },
         timeout=10,
     )
 
+# --------------------------- 主流程 ---------------------------
 
 def main():
     for pid, info in PRODUCTS.items():
         html = fetch_html(info["url"])
         qty, raw = parse_availability(html)
         avail = {s: q for s, q in qty.items() if q != 0}
+
         if avail:
-            lines = []
-            for store, q in avail.items():
-                if q == -1:
-                    lines.append(f"• {store}：有貨 (數量未知)")
-                else:
-                    lines.append(f"• {store}：{q} 件")
+            lines = [
+                f"• {store}：{'有貨 (數量未知)' if q == -1 else f'{q} 件'}"
+                for store, q in avail.items()
+            ]
             detail = "\n".join(lines)
             notify(
                 f"🟢 <b>{info['name']}（{pid}）</b>\n{detail}\n<a href='{info['url']}'>商品頁面</a>"
