@@ -32,6 +32,10 @@ PRODUCTS = {
         "name": "KÄLLARHÄLS 便便花瓶",
         "url": "https://www.ikea.com.tw/zh/products/home-decoration/vases-bowls-and-accessories/kallarhals-art-80583720",
     },
+    "30459718": {
+        "name": "ISJAKT Led上照落地燈",
+        "url": "https://www.ikea.com.tw/zh/products/luminaires/floor-lamps/isjakt-art-30459718",
+    },
 }
 
 TARGET_STORES = {"桃園店", "新莊店", "新店店", "內湖店", "台北城市店"}
